@@ -1,0 +1,47 @@
+{
+  "name": "resume-builder",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write app components lib tests next.config.ts package.json tsconfig.json README.md",
+    "test:browser": "node tests/storage-browser.mjs",
+    "test:storage:browser": "node tests/storage-browser.mjs",
+    "check:public": "node --import tsx scripts/check-publication.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.290",
+    "@anthropic-ai/sdk": "^0.131.0",
+    "cheerio": "^1.1.2",
+    "mammoth": "^1.10.0",
+    "next": "^16.0.0",
+    "openai": "^7.28.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "5.4.296",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prettier": "^3.9.9",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "description": "A local-first resume workspace with job-specific tailoring, evidence-backed AI matching, and SQLite recovery."
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Resume Builder browser recovery</title>
+    <style>
+      body {
+        font:
+          16px/1.6 system-ui,
+          sans-serif;
+        max-width: 680px;
+        margin: 10vh auto;
+        padding: 24px;
+        color: #27272a;
+      }
+      button,
+      a {
+        font: inherit;
+      }
+      button {
+        padding: 10px 16px;
+        border: 1px solid #d4d4d8;
+        border-radius: 8px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      [data-recovery-status] {
+        white-space: pre-wrap;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      .hint {
+        color: #61616b;
+      }
+    </style>
+  </head>
+  <body>
+    <section id="resume-browser-recovery">
+      <h1>Recover your browser workspace</h1>
+      <p>
+        This page reads the old Resume Builder data at
+        <code data-recovery-origin></code>. It never changes or deletes browser
+        storage, and it does not contact the database.
+      </p>
+      <p class="hint">
+        Use the same browser and exact address where you built your resumes.
+        Both the hostname and port must match. Download a backup here, then
+        import it using <strong>Backup &amp; recovery</strong> in the updated
+        app.
+      </p>
+      <button data-recovery-export>Download browser backup</button>
+      <button data-recovery-raw>Download raw recovery data</button>
+      <p data-recovery-status role="status"></p>
+    </section>
+    <h2>If another app is using the original port</h2>
+    <p>You can recover data without stopping that app:</p>
+    <ol>
+      <li>
+        Drag <a id="bookmarklet">Recover browser resumes</a> to your browser's
+        bookmarks bar.
+      </li>
+      <li>
+        Open the original address (such as <code>http://localhost:3000</code>)
+        in the browser where you built your resumes.
+      </li>
+      <li>
+        Click that bookmark, then <strong>Download browser backup</strong>.
+      </li>
+      <li>
+        Return to the updated Resume Builder and use
+        <strong>Backup &amp; recovery → Import backup</strong>.
+      </li>
+    </ol>
+    <p class="hint">
+      The bookmark runs this local, read-only recovery tool at the old browser
+      address. Resume data stays in the browser until you download it. If the
+      old app blocks the tool with its content security policy, serve this
+      project's recovery page at the original address instead.
+    </p>
+    <a href="/">Return to Resume Builder</a>
+    <script src="/browser-recovery.js"></script>
+    <script>
+      const scriptURL = new URL("/browser-recovery.js", location.href).href;
+      document.getElementById("bookmarklet").href =
+        'javascript:(()=>{const s=document.createElement("script");s.src=' +
+        JSON.stringify(scriptURL) +
+        ";document.head.appendChild(s)})()";
+    </script>
+  </body>
+</html>

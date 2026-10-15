@@ -1,0 +1,46 @@
+node_modules/
+.next/
+.env*
+!.env.example
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Local workspace databases and sidecar files must never be committed.
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Local exports, captures, and recovery data
+/tmp/
+/backups/
+/data/
+*.db
+*.db-*
+*.sqlite3
+*.sqlite3-*
+*.sqlite-journal
+*.log
+*.pem
+*.key
+*.p12
+*.pfx
+.DS_Store
+Thumbs.db
+coverage/
+.vercel/
+.netlify/
+# Local agent state and account configuration
+/.agents/
+/.codex/
+/.claude/
+/.aws/
+
+# Imported resumes and downloaded workspace backups
+*.pdf
+*.docx
+!/tests/fixtures/*.pdf
+!/tests/fixtures/*.docx
+resume-builder-backup*.json
+resume-builder-browser*.json
+resume-builder-unsaved*.json
