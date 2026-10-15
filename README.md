@@ -1,4 +1,4 @@
-# Resume Builder
+# AI Resume Builder
 
 A local-first workspace for managing resume versions, tracking job applications, and tailoring each application with AI. Built with Next.js, React, TypeScript, and SQLite.
 
