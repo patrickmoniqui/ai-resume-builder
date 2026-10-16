@@ -8,10 +8,12 @@ Import a resume, save a job posting, compare the evidence behind a match, and re
 
 _Demo uses fictional records and an illustrative assessment; no live AI request._
 
+[More screenshots and reproduction instructions](docs/screenshots.md): desktop chat, mobile resume, and mobile job list.
+
 ## Highlights
 
 - **Resume editing:** PDF/DOCX import, inline editing, company/team grouping, section reordering, undo/redo, and one- or two-page PDF export.
-- **Application workflow:** searchable job cards, application statuses, shared base templates, and independent copies tailored to each job.
+- **Application workflow:** searchable job cards, application statuses, saved posting links, shared base templates, and independent copies tailored to each job.
 - **Evidence-backed AI:** resume-to-job matching with quoted evidence, missing-skill explanations, and reviewed before/after edits. Supports Anthropic and OpenAI API connections and optional local CLI connections.
 - **Recoverable storage:** SQLite autosave, revision checks against stale tabs, original document retention, portable exports, and recovery snapshots.
 - **Responsive workspace:** resizable panels, keyboard controls, and a mobile tools drawer.

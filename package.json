@@ -11,7 +11,8 @@
     "format": "prettier --write app components lib tests next.config.ts package.json tsconfig.json README.md",
     "test:browser": "node tests/storage-browser.mjs",
     "test:storage:browser": "node tests/storage-browser.mjs",
-    "check:public": "node --import tsx scripts/check-publication.ts"
+    "check:public": "node --import tsx scripts/check-publication.ts",
+    "screenshots": "node --import tsx scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.290",
