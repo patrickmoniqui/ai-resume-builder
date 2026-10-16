@@ -22,8 +22,6 @@ Runs locally. Built with Next.js, React, TypeScript, and SQLite. AI features req
 
 _All screenshots use fictional records. Match assessments and chat replies are illustrative; no live AI requests were made. Click any image to view it at full size._
 
-[Reproduce these screenshots](docs/screenshots.md).
-
 ## Highlights
 
 - **Resume editing:** PDF/DOCX import, inline editing, company/team grouping, section reordering, undo/redo, and one- or two-page PDF export.
