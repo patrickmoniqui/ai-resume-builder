@@ -8,6 +8,7 @@ import {
 import { savedAssessmentSchema } from "./saved-matches";
 import { referenceDocumentSchema } from "./reference-documents";
 import { chatMessageSchema } from "./chat";
+import { jobLinkSchema } from "./job-links";
 
 export const WORKSPACE_STORAGE = "resume-builder.workspace.v1";
 export const PAGE_STORAGE = "resume-builder.page-count.v1";
@@ -38,6 +39,7 @@ export const storedWorkspaceSchema = z.object({
         rawDescription: z.string().max(60000),
         keywords: z.array(keywordSchema).max(100),
         url: z.string().optional(),
+        additionalUrls: z.array(jobLinkSchema).max(19).optional(),
         tailoredDocId: id.optional(),
         assessment: savedAssessmentSchema.optional(),
         status: z.enum(jobStatuses).optional(),

@@ -1180,6 +1180,34 @@ mark.focused {
   padding: 0;
   font-weight: 400;
 }
+.job-links {
+  margin: 18px 0;
+}
+.job-links-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.job-links-list li,
+.job-link-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.job-links-list a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  flex: 1;
+  font-size: 12.5px;
+}
+.job-link-input input {
+  min-width: 0;
+  flex: 1;
+}
+.job-link-input button {
+  flex-shrink: 0;
+}
 .score-block {
   padding: 20px 0 18px;
   display: flex;

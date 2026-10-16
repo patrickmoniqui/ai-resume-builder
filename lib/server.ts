@@ -60,7 +60,9 @@ export async function fetchPublicPage(
           cb(null, addressRecord.address, addressRecord.family),
         headers: {
           "User-Agent": "ResumeBuilder/1.0",
-          Accept: "text/html,application/json",
+          // Workday negotiates a JSON SPA redirect when application/json is
+          // accepted, even though the same URL serves full JobPosting HTML.
+          Accept: "text/html,application/xhtml+xml",
         },
       },
       (res) => {

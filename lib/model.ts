@@ -68,6 +68,7 @@ export type Job = z.infer<typeof jobInputSchema> & {
   templateId: string;
   source: string;
   url?: string;
+  additionalUrls?: string[];
   tailoredDocId?: string;
   assessment?: SavedAssessment;
   status?: JobStatus;

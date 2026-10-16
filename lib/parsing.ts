@@ -37,6 +37,31 @@ function parseRoles(lines: string[]): Resume["roles"] {
       markedBullet = false;
       continue;
     }
+    // Untagged PDFs can put an employer on its own line, followed by dated
+    // roles whose suffix names a team. Do not consume that first role as the
+    // employer/date line of a title-first entry.
+    const next = lines[i + 1];
+    if (
+      !dates &&
+      !/^[•▪●-]\s/.test(line) &&
+      !/[.!?]$/.test(line) &&
+      line.length < 120 &&
+      !/[·|]/.test(line) &&
+      next?.match(dateRange) &&
+      next
+        .replace(dateRange, "")
+        .split(/[·|]/)
+        .filter((part) => part.trim()).length >= 2 &&
+      !/^[•▪●-]\s/.test(next) &&
+      !/^(?:Role|Rôle)\s*:/i.test(next)
+    ) {
+      keepEmptyCompany();
+      company = line;
+      companyStart = roles.length;
+      current = undefined;
+      markedBullet = false;
+      continue;
+    }
     const roleMarker = /^(?:Role|Rôle)\s*:\s*/i.test(line);
     const heading = line
       .replace(/^(?:Role|Rôle)\s*:\s*/i, "")
@@ -68,7 +93,7 @@ function parseRoles(lines: string[]): Resume["roles"] {
           !/[.!?]$/.test(heading)));
     if (roleMarker || isHeading || nextDate || contextualHeading) {
       current = {
-        title: parts[0]?.trim() || "",
+        title: company ? heading : parts[0]?.trim() || "",
         company:
           company ||
           parts.slice(1).join(" · ").trim() ||
@@ -108,11 +133,15 @@ function parseRoles(lines: string[]): Resume["roles"] {
 function parseEducation(lines: string[]): Resume["edu"] {
   if (!lines.length) return [];
   return lines.map((line) => {
-    const dates = line.match(dateRange)?.[0] || "";
+    const dates =
+      line.match(dateRange)?.[0] ||
+      line.match(/\b(?:19|20)\d{2}\s*$/)?.[0].trim() ||
+      "";
     const parts = line
-      .replace(dateRange, "")
+      .replace(dates, "")
       .trim()
       .split(/\s*[·|]\s*/)
+      .map((part) => part.trim())
       .filter(Boolean);
     return {
       degree: parts[0] || "",
@@ -188,6 +217,8 @@ export function parseResume(text: string): Resume {
       "certificates",
       "licenses",
       "projects",
+      "side project",
+      "side projects",
       "personal projects",
       "selected projects",
       "languages",

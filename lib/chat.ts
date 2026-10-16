@@ -39,6 +39,7 @@ export const chatWorkspaceSchema = z.object({
       templateId: z.string(),
       source: z.string(),
       url: z.string().optional(),
+      additionalUrls: z.array(z.string().max(2000)).max(19).optional(),
       tailoredDocId: z.string().optional(),
     }),
   ),

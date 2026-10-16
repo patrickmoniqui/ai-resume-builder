@@ -1,9 +1,52 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { extractJobPosting } from "../lib/job-posting";
 const description =
   "Build Python applications and generative AI agents. Required: Python and LLM experience. Preferred: FastAPI and Azure.";
 const url = "https://jobs.example.com/job/123";
+
+test("JSON redirect and bootstrap responses are never scanned as job descriptions", () => {
+  const payload = JSON.stringify({
+    widget: "redirect",
+    url: "https://unitytech.wd1.myworkdayjobs.com/Unity/job/Montreal-Canada/Software-Developer--Unity-Editor_JOBREQ-2616397",
+    externalSpa: true,
+  });
+  assert.ok(payload.length > 50);
+  assert.equal(extractJobPosting(payload, url).text, "");
+  assert.equal(
+    extractJobPosting(
+      JSON.stringify([{ description: "Loading the job posting" }]),
+      url,
+    ).text,
+    "",
+  );
+});
+
+test("Unity Workday metadata exposes requirements despite its empty app shell", () => {
+  const html = readFileSync(
+    new URL("./fixtures/unity-workday.html", import.meta.url),
+    "utf8",
+  );
+  const result = extractJobPosting(
+    html,
+    "https://unitytech.wd1.myworkdayjobs.com/Unity/job/Montreal-Canada/Dveloppeur-euse--de-logiciels---Software-Developer--Unity-Editor_JOBREQ-2616397?source=LinkedIn",
+  );
+  assert.match(result.title, /Software Developer, Unity Editor/);
+  assert.match(result.company, /Unity/);
+  for (const term of [
+    "C#",
+    "C++",
+    "automated testing",
+    "Claude Code",
+    "Copilot",
+    "Unity Search",
+    "Graph Toolkit",
+  ])
+    assert.ok(result.text.includes(term), `Missing ${term}`);
+  assert.match(result.text, /What we're looking for:/);
+  assert.match(result.text, /You might also have:/);
+});
 
 test("Zoho encoded job data is read without executing the page scripts", () => {
   const jobs = [

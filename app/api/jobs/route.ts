@@ -6,11 +6,7 @@ import {
   askSubscriptionAI,
   assertLocalSubscriptionRequest,
 } from "@/lib/local-ai";
-import {
-  jobScanPrompt,
-  jobScanOutputSchema,
-  parseJobScan,
-} from "@/lib/job-scan";
+import { jobScanOutputSchema, scanJobPosting } from "@/lib/job-scan";
 export const runtime = "nodejs";
 const inputSchema = z.object({
   connection: aiConnectionSchema,
@@ -67,21 +63,21 @@ export async function POST(req: Request) {
         "Add the job responsibilities and requirements to your pasted description (at least 50 characters).",
       );
     }
-    const data = JSON.stringify({
-      posting: text,
-      metadata: { title, company, location },
-    });
-    const output =
-      body.connection.method === "subscription"
-        ? await askSubscriptionAI(
-            body.connection,
-            jobScanPrompt,
-            data,
-            undefined,
-            jobScanOutputSchema,
-          )
-        : await askAI(body.connection, jobScanPrompt, data);
-    return Response.json(parseJobScan(output, text));
+    const result = await scanJobPosting(
+      text,
+      { title, company, location },
+      (system, data) =>
+        body.connection.method === "subscription"
+          ? askSubscriptionAI(
+              body.connection,
+              system,
+              data,
+              undefined,
+              jobScanOutputSchema,
+            )
+          : askAI(body.connection, system, data),
+    );
+    return Response.json(result);
   } catch (e) {
     return errorResponse(e);
   }

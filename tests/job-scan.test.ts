@@ -2,7 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { POST } from "../app/api/jobs/route";
-import { parseJobScan, jobScanOutputSchema } from "../lib/job-scan";
+import {
+  parseJobScan,
+  jobScanOutputSchema,
+  scanJobPosting,
+} from "../lib/job-scan";
+import { extractJobPosting } from "../lib/job-posting";
 import {
   askSubscriptionAI,
   type ClaudeQuery,
@@ -20,6 +25,106 @@ const scanned = {
     { term: "Python", category: "Hard skills", required: false, aliases: [] },
   ],
 };
+
+test("a sparse scan of the Unity posting gets one full-source review", async () => {
+  const html = await readFile(
+    new URL("./fixtures/unity-workday.html", import.meta.url),
+    "utf8",
+  );
+  const extracted = extractJobPosting(
+    html,
+    "https://unitytech.wd1.myworkdayjobs.com/Unity/job/example",
+  );
+  const sparse = {
+    ...extracted,
+    keywords: [
+      {
+        term: "Software development",
+        category: "Hard skills",
+        required: true,
+        aliases: [],
+      },
+      { term: "Unity Editor", category: "Tools", required: true, aliases: [] },
+    ],
+  };
+  const complete = {
+    ...sparse,
+    keywords: [
+      ...sparse.keywords,
+      { term: "C#", category: "Hard skills", required: true, aliases: [] },
+      {
+        term: "Automated testing",
+        category: "Hard skills",
+        required: true,
+        aliases: [],
+      },
+      { term: "C++", category: "Hard skills", required: false, aliases: [] },
+      { term: "Claude Code", category: "Tools", required: false, aliases: [] },
+      { term: "Copilot", category: "Tools", required: false, aliases: [] },
+    ],
+  };
+  let calls = 0;
+  const result = await scanJobPosting(
+    extracted.text,
+    extracted,
+    async (_system, input) => {
+      const data = JSON.parse(input);
+      assert.equal(data.posting, extracted.text);
+      assert.equal(data.metadata.title, extracted.title);
+      if (++calls === 1) return sparse;
+      assert.equal(data.previousScan.keywords.length, 2);
+      return complete;
+    },
+  );
+  assert.equal(calls, 2);
+  assert.equal(result.rawDescription, extracted.text);
+  assert.equal(
+    result.keywords.find(({ term }) => term === "C#")?.required,
+    true,
+  );
+  assert.equal(
+    result.keywords.find(({ term }) => term === "C++")?.required,
+    false,
+  );
+});
+
+test("a review can confirm a short result without looping or adding invented terms", async () => {
+  let calls = 0;
+  const result = await scanJobPosting(posting.repeat(12), scanned, async () => {
+    calls++;
+    return scanned;
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(result.keywords, scanned.keywords);
+});
+
+test("short descriptions and scans with more than two distinct terms need no review", async () => {
+  for (const [text, output] of [
+    [posting, scanned],
+    [
+      posting.repeat(12),
+      {
+        ...scanned,
+        keywords: [
+          ...scanned.keywords,
+          {
+            term: "Waveguide simulation",
+            category: "Hard skills",
+            required: true,
+            aliases: [],
+          },
+        ],
+      },
+    ],
+  ] as const) {
+    let calls = 0;
+    await scanJobPosting(text, scanned, async () => {
+      calls++;
+      return output;
+    });
+    assert.equal(calls, 1);
+  }
+});
 
 test("job scan retains source, specialized skills, and required/preferred distinctions", () => {
   const result = parseJobScan(

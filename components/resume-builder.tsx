@@ -39,6 +39,8 @@ import { useSavedAI } from "./use-saved-ai";
 import { useJobCardVisibility } from "./use-job-card-visibility";
 import { filterJobs, reorderVisibleJobs } from "@/lib/job-list";
 import SkillMatchList from "./skill-match-list";
+import JobLinks from "./job-links";
+import { jobLinks, jobLinkSchema, withJobLinks } from "@/lib/job-links";
 import MatchingDiagnostics from "./matching-diagnostics";
 import AIConnector from "./ai-connector";
 import AIChat from "./ai-chat";
@@ -745,6 +747,9 @@ export default function ResumeBuilder() {
     setBusy(true);
     setError("");
     try {
+      const referenceUrl = jobUrl.trim();
+      if (referenceUrl && !jobLinkSchema.safeParse(referenceUrl).success)
+        throw new Error("Enter a valid HTTP or HTTPS job URL.");
       const res = await request(
         "/api/jobs",
         jobTab === "url"
@@ -758,7 +763,7 @@ export default function ResumeBuilder() {
         id: uid(),
         templateId: best?.id || "",
         source: jobTab === "paste" ? "Pasted description" : "Company site",
-        url: jobTab === "url" ? jobUrl : undefined,
+        url: referenceUrl || undefined,
       });
       setPendingTemplate(best?.id || "");
     } catch (e) {
@@ -2230,6 +2235,12 @@ export default function ResumeBuilder() {
                 <div className="eyebrow mono">AI RESUME MATCH</div>
                 <h1>{job.title}</h1>
                 <p className="muted">{job.company}</p>
+                <button
+                  className="text-button posting-link"
+                  onClick={() => open("posting")}
+                >
+                  Job description & links
+                </button>
                 {matchingStatus}
                 {!ai && (
                   <button
@@ -2254,9 +2265,9 @@ export default function ResumeBuilder() {
                   <h1>{job.title}</h1>
                   <div className="muted">
                     {job.company} ·{" "}
-                    {job.url ? (
+                    {jobLinks(job)[0] ? (
                       <a
-                        href={job.url}
+                        href={jobLinks(job)[0]}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -2271,6 +2282,12 @@ export default function ResumeBuilder() {
                       </button>
                     )}
                   </div>
+                  <button
+                    className="text-button posting-link"
+                    onClick={() => open("posting")}
+                  >
+                    Job description & links
+                  </button>
                 </div>
                 <div className="score-block ring">
                   <div
@@ -2903,6 +2920,12 @@ export default function ResumeBuilder() {
                       />
                     </label>
                   </div>
+                  <JobLinks
+                    links={jobLinks(pending)}
+                    onChange={(links) =>
+                      setPending(withJobLinks(pending, links))
+                    }
+                  />
                   <div className="keyword-heading">
                     <strong>
                       {pending.keywords.length} keywords found by AI
@@ -3066,23 +3089,39 @@ export default function ResumeBuilder() {
                       )}
                     </label>
                   ) : (
-                    <label className="form-field">
-                      Job description
-                      <textarea
-                        aria-label="Job description"
-                        autoFocus
-                        rows={8}
-                        disabled={busy}
-                        placeholder="Paste the title, company, responsibilities and requirements…"
-                        value={description}
-                        maxLength={60000}
-                        onChange={(e) => setDescription(e.target.value)}
-                      />
-                      <small>
-                        Include the responsibilities and requirements.{" "}
-                        {description.trim().length}/50 characters minimum.
-                      </small>
-                    </label>
+                    <>
+                      <label className="form-field">
+                        Job description
+                        <textarea
+                          aria-label="Job description"
+                          autoFocus
+                          rows={8}
+                          disabled={busy}
+                          placeholder="Paste the title, company, responsibilities and requirements…"
+                          value={description}
+                          maxLength={60000}
+                          onChange={(e) => setDescription(e.target.value)}
+                        />
+                        <small>
+                          Include the responsibilities and requirements.{" "}
+                          {description.trim().length}/50 characters minimum.
+                        </small>
+                      </label>
+                      <label className="form-field">
+                        Job URL (optional)
+                        <input
+                          type="url"
+                          maxLength={2000}
+                          disabled={busy}
+                          value={jobUrl}
+                          onChange={(e) => setJobUrl(e.target.value)}
+                          placeholder="Company posting or LinkedIn URL"
+                        />
+                        <small>
+                          Saved for reference. AI scans the pasted description.
+                        </small>
+                      </label>
+                    </>
                   )}
                   {!ai && (
                     <p className="dialog-description">
@@ -3128,6 +3167,20 @@ export default function ResumeBuilder() {
             <>
               <h2>{job?.title}</h2>
               <p className="dialog-description">{job?.company}</p>
+              {job && (
+                <JobLinks
+                  key={job.id}
+                  links={jobLinks(job)}
+                  onChange={(links) =>
+                    setW((s) => ({
+                      ...s,
+                      jobs: s.jobs.map((j) =>
+                        j.id === job.id ? withJobLinks(j, links) : j,
+                      ),
+                    }))
+                  }
+                />
+              )}
               <div className="posting-description">{job?.rawDescription}</div>
             </>
           )}

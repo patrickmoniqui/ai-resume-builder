@@ -21,6 +21,8 @@ npm run build
 
 ## Implemented
 
+- Save up to 20 reference links per job through **Job description & links**. Pasted descriptions can include an optional reference URL; adding links does not scan them. Job scans with very few extracted terms from a long posting receive one additional AI review, which can add provider usage.
+
 - Job cards show the company and an inline application status, such as **Company • To apply**. New jobs have no status label. Use the dropdown beside the company to manually choose **To apply**, **Applied**, or **Rejected**, or choose **No status** to clear the label; the choice saves on this device.
 - Collapse individual job cards with their chevron to show only the company and title, or use **Collapse all** above the list to fit more jobs. **Expand all** restores the details. Collapsed cards can still be selected and reordered; their visibility is remembered in this browser.
 - Search above the job list by company, title, location or keyword; search ignores case and accents. Combine **Status** and **Resume** filters, see the matching job count, or use **Clear filters** to restore the full list. Collapse/expand all affects the displayed results; reordering filtered jobs keeps hidden jobs in place.

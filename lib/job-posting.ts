@@ -5,6 +5,21 @@ export const jobLinkFallbackMessage =
   "This link did not expose a readable job description. The site may require JavaScript or sign-in. Open the posting, copy its responsibilities and requirements, and paste them below to scan with AI.";
 
 export function extractJobPosting(html: string, address: string) {
+  // A JSON redirect/bootstrap response is not a description. In particular,
+  // its URL can look like enough text to pass the minimum-length check.
+  if (/^\s*[\[{]/.test(html)) {
+    try {
+      JSON.parse(html);
+      return {
+        text: "",
+        title: "",
+        company: new URL(address).hostname,
+        location: "",
+      };
+    } catch {
+      // Non-JSON text can still contain a readable posting.
+    }
+  }
   const $ = cheerio.load(html);
   const postings: Record<string, unknown>[] = [];
   const search = (node: unknown): void => {
