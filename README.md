@@ -1,8 +1,17 @@
 # AI Resume Builder
 
-A local-first workspace for managing resume versions, tracking job applications, and tailoring each application with AI. Built with Next.js, React, TypeScript, and SQLite.
+AI Resume Builder uses AI to analyze job postings, extract key skills, and assess how your resume demonstrates those skills. It helps you build stronger, job-specific resumes with evidence-backed feedback, clearer wording, and suggested edits you review before applying.
 
-Import a resume, save a job posting, compare the evidence behind a match, and review suggested edits before applying them. The app starts with an empty workspace and runs on your computer.
+Built with Next.js, React, TypeScript, and SQLite, it runs locally and keeps your resume versions, saved jobs, and application notes in one workspace.
+
+## How AI helps improve your resume
+
+1. **Analyze the job.** Import a posting URL or paste its description. AI identifies the role and extracts key skills, tools, and qualifications, distinguishing required skills from preferred ones.
+2. **Find evidence across your resume.** AI assesses the selected resume against those requirements, considering experience, project descriptions, skills, and other resume sections. It recognizes relevant evidence beyond exact keyword matches and explains matched and missing skills.
+3. **Understand what to improve.** Review the match assessment, quoted supporting evidence, and gaps to see where your resume could communicate your experience more clearly.
+4. **Build a better version.** Use AI chat and tailoring suggestions to improve summaries, strengthen experience bullets, and highlight relevant work using your resume, notes, and reference documents. Review before/after edits and apply the changes you choose to a job-specific resume.
+
+Suggestions are grounded in the information you provide; missing skills are prompts to review your experience, not claims to add without support. AI features require a connected provider. The app starts with an empty workspace.
 
 ## Screenshots
 
