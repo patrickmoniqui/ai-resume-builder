@@ -4,11 +4,24 @@ A local-first workspace for managing resume versions, tracking job applications,
 
 Import a resume, save a job posting, compare the evidence behind a match, and review suggested edits before applying them. The app starts with an empty workspace and runs on your computer.
 
-![Resume Builder workspace with a fictional resume, job list, and illustrative match assessment](docs/images/workspace.png)
+## Screenshots
 
-_Demo uses fictional records and an illustrative assessment; no live AI request._
+### Workspace and resume matching
 
-[More screenshots and reproduction instructions](docs/screenshots.md): desktop chat, mobile resume, and mobile job list.
+<a href="docs/images/workspace.png"><img src="docs/images/workspace.png" alt="Desktop workspace with a fictional tailored resume, four jobs, and a sample match assessment" height="400" /></a>
+
+### AI chat
+
+<a href="docs/images/ai-chat.png"><img src="docs/images/ai-chat.png" alt="Desktop workspace showing a scripted resume coaching conversation" height="400" /></a>
+
+### Mobile resume and job list
+
+<a href="docs/images/mobile-resume.png"><img src="docs/images/mobile-resume.png" alt="Mobile resume editor with fictional applicant details" height="400" /></a>
+<a href="docs/images/mobile-jobs.png"><img src="docs/images/mobile-jobs.png" alt="Mobile job list with four fictional employers and application statuses" height="400" /></a>
+
+_All screenshots use fictional records. Match assessments and chat replies are illustrative; no live AI requests were made. Click any image to view it at full size._
+
+[Reproduce these screenshots](docs/screenshots.md).
 
 ## Highlights
 
