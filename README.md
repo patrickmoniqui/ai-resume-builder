@@ -1,17 +1,14 @@
 # AI Resume Builder
 
-AI Resume Builder uses AI to analyze job postings, extract key skills, and assess how your resume demonstrates those skills. It helps you build stronger, job-specific resumes with evidence-backed feedback, clearer wording, and suggested edits you review before applying.
+Build better resumes for the jobs you want. Import your resume and a job posting, then use AI to:
 
-Built with Next.js, React, TypeScript, and SQLite, it runs locally and keeps your resume versions, saved jobs, and application notes in one workspace.
+- Extract the job’s key skills and requirements.
+- Find matching skills across your resume and explain the gaps.
+- Suggest clearer wording and edits tailored to the role.
 
-## How AI helps improve your resume
+Review each suggestion before applying it. Keep separate resume versions for different jobs and export them as PDFs.
 
-1. **Analyze the job.** Import a posting URL or paste its description. AI identifies the role and extracts key skills, tools, and qualifications, distinguishing required skills from preferred ones.
-2. **Find evidence across your resume.** AI assesses the selected resume against those requirements, considering experience, project descriptions, skills, and other resume sections. It recognizes relevant evidence beyond exact keyword matches and explains matched and missing skills.
-3. **Understand what to improve.** Review the match assessment, quoted supporting evidence, and gaps to see where your resume could communicate your experience more clearly.
-4. **Build a better version.** Use AI chat and tailoring suggestions to improve summaries, strengthen experience bullets, and highlight relevant work using your resume, notes, and reference documents. Review before/after edits and apply the changes you choose to a job-specific resume.
-
-Suggestions are grounded in the information you provide; missing skills are prompts to review your experience, not claims to add without support. AI features require a connected provider. The app starts with an empty workspace.
+Runs locally. Built with Next.js, React, TypeScript, and SQLite. AI features require your own provider connection.
 
 ## Screenshots
 
