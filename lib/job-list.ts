@@ -4,6 +4,7 @@ export type JobListFilters = {
   query: string;
   status: string;
   templateId: string;
+  companies?: string[];
 };
 
 function searchText(value: string) {
@@ -13,6 +14,8 @@ function searchText(value: string) {
 export function filterJobs(jobs: Job[], filters: JobListFilters) {
   const terms = searchText(filters.query).trim().split(/\s+/).filter(Boolean);
   return jobs.filter((job) => {
+    if (filters.companies?.length && !filters.companies.includes(job.company))
+      return false;
     if (
       filters.status &&
       (filters.status === "none" ? !!job.status : job.status !== filters.status)

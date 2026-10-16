@@ -443,6 +443,7 @@ try {
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
 
   // Original and reference files are included in an atomic reset and restore.
+  await page.getByRole("tab", { name: /^Resumes/ }).click();
   await page
     .getByRole("button", { name: "Import resume", exact: true })
     .click();

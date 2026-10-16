@@ -88,6 +88,54 @@ test("job filters intersect search, application status and assigned resume", () 
   );
 });
 
+test("company multiselect matches any selected company and intersects other filters", () => {
+  assert.deepEqual(
+    ids(filterJobs(jobs, { ...filters, companies: ["Unity"] })),
+    ["a", "c"],
+  );
+  assert.deepEqual(
+    ids(
+      filterJobs(jobs, {
+        ...filters,
+        companies: ["Unity"],
+        query: "frontend",
+        templateId: "base",
+        status: "none",
+      }),
+    ),
+    ["c"],
+  );
+  assert.deepEqual(
+    ids(
+      filterJobs(jobs, {
+        ...filters,
+        companies: ["Unity"],
+        status: "to-apply",
+      }),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    ids(filterJobs(jobs, { ...filters, companies: ["Uni"] })),
+    [],
+  );
+  assert.deepEqual(
+    ids(filterJobs(jobs, { ...filters, companies: ["Unity", "Artelia"] })),
+    ["a", "b", "c"],
+  );
+  assert.deepEqual(
+    ids(
+      filterJobs(jobs, {
+        ...filters,
+        companies: ["Unity", "Artelia"],
+        status: "to-apply",
+      }),
+    ),
+    ["b"],
+  );
+  assert.deepEqual(filterJobs(jobs, { ...filters, companies: [] }), jobs);
+});
+
 test("filtered reordering preserves hidden slots, records and the original array", () => {
   const result = reorderVisibleJobs(jobs, ["a", "c"], "c", 0);
   assert.deepEqual(ids(result), ["c", "b", "a", "d"]);

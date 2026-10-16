@@ -31,12 +31,13 @@ import {
   type Suggestion,
 } from "@/lib/model";
 import { useAIMatches } from "./use-ai-matches";
+import ResumeComparisons from "./resume-comparisons";
+import { pendingAssessments } from "@/lib/resume-comparisons";
 import { useResumeHistory } from "./use-resume-history";
 import { usePanelWidths, PanelResizer } from "./resizable-panels";
 import InlineField from "./inline-field";
 import Dialog from "./dialog";
 import { useSavedAI } from "./use-saved-ai";
-import { useJobCardVisibility } from "./use-job-card-visibility";
 import { filterJobs, reorderVisibleJobs } from "@/lib/job-list";
 import SkillMatchList from "./skill-match-list";
 import JobLinks from "./job-links";
@@ -132,10 +133,39 @@ export default function ResumeBuilder() {
   );
   const [draggingJob, setDraggingJob] = useState<string | null>(null),
     [dropJobIndex, setDropJobIndex] = useState<number | null>(null);
-  const [collapsedJobs, setCollapsedJobs] = useJobCardVisibility();
+  const [sidebarTab, setSidebarTab] = useState<"jobs" | "resumes">("jobs");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterControl = useRef<HTMLDivElement>(null);
+  const filterTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!filterControl.current?.contains(event.target as Node))
+        setFiltersOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFiltersOpen(false);
+        filterTrigger.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [filtersOpen]);
   const [jobSearch, setJobSearch] = useState("");
   const [jobStatusFilter, setJobStatusFilter] = useState("");
   const [jobTemplateFilter, setJobTemplateFilter] = useState("");
+  const [jobCompanyFilter, setJobCompanyFilter] = useState<string[]>([]);
+  const jobCompanies = [
+    ...new Set(w.jobs.map((job) => job.company).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
+  const activeJobCompanyFilter = jobCompanyFilter.filter((company) =>
+    jobCompanies.includes(company),
+  );
   const activeJobTemplateFilter =
     jobTemplateFilter === "__none__" ||
     w.templates.some((t) => t.id === jobTemplateFilter)
@@ -145,19 +175,20 @@ export default function ResumeBuilder() {
     query: jobSearch,
     status: jobStatusFilter,
     templateId: activeJobTemplateFilter,
+    companies: activeJobCompanyFilter,
   });
   const jobFiltersActive = !!(
     jobSearch.trim() ||
     jobStatusFilter ||
-    activeJobTemplateFilter
+    activeJobTemplateFilter ||
+    activeJobCompanyFilter.length
   );
   const clearJobFilters = () => {
     setJobSearch("");
     setJobStatusFilter("");
     setJobTemplateFilter("");
+    setJobCompanyFilter([]);
   };
-  const allJobsCollapsed =
-    visibleJobs.length > 0 && visibleJobs.every((j) => collapsedJobs[j.id]);
   const [modal, setModal] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -225,11 +256,52 @@ export default function ResumeBuilder() {
   const docId = documentId(w),
     doc = docId ? w.docs[docId] : undefined,
     tailored = !!job?.tailoredDocId;
-  const matches = useAIMatches(ai, (jobId, assessment) =>
+  const matches = useAIMatches(ai, (jobId, assessment, comparisonId) =>
     setW((state) => ({
       ...state,
-      jobs: state.jobs.map((j) => (j.id === jobId ? { ...j, assessment } : j)),
+      jobs: state.jobs.map((j) =>
+        j.id === jobId
+          ? comparisonId
+            ? {
+                ...j,
+                comparisonAssessments: {
+                  ...j.comparisonAssessments,
+                  [comparisonId]: assessment,
+                },
+              }
+            : { ...j, assessment }
+          : j,
+      ),
     })),
+  );
+  const reassessSelected = () => {
+    if (!job) return;
+    const pending = pendingAssessments(w, job);
+    if (!pending.length) {
+      flash("All selected resume assessments are up to date.");
+      return;
+    }
+    void Promise.all(
+      pending.map(({ doc, comparisonId }) =>
+        matches.reassess(job, doc, comparisonId),
+      ),
+    );
+  };
+  const comparisonPanel = job && doc && (
+    <ResumeComparisons
+      key={job.id}
+      workspace={w}
+      job={job}
+      matches={matches}
+      onSelect={(ids) =>
+        setW((state) => ({
+          ...state,
+          jobs: state.jobs.map((j) =>
+            j.id === job.id ? { ...j, comparisonDocIds: ids } : j,
+          ),
+        }))
+      }
+    />
   );
   const analysis = job ? matches.get(job) : undefined;
   const debugJob = job || w.jobs[0];
@@ -239,8 +311,9 @@ export default function ResumeBuilder() {
         <>
           <div className="loading-row" role="status">
             <span className="spinner" />
-            AI is assessing your resume… {matches.progress(job)?.completed || 0}
-            /{job.keywords.length} skills · {matches.elapsed(job)}s
+            AI is assessing selected resumes…{" "}
+            {matches.progress(job)?.completed || 0}/{job.keywords.length} skills
+            · {matches.elapsed(job)}s
           </div>
           <button
             className="ghost full-width"
@@ -898,7 +971,7 @@ export default function ResumeBuilder() {
       <header className="topbar">
         <button
           className="icon-button"
-          aria-label="Toggle templates and jobs panel"
+          aria-label="Toggle jobs and resumes panel"
           aria-expanded={left}
           onClick={() => setLeft((v) => !v)}
         >
@@ -907,20 +980,6 @@ export default function ResumeBuilder() {
         <div className="brand">
           <span className="logo">R</span>
           <span>Resume Builder</span>
-        </div>
-        <span className="divider" />
-        <div className="source-info">
-          {template ? (
-            <>
-              <span className="filename">{template.sourceFile}</span>
-              <span className="source-label mono">{template.source}</span>
-            </>
-          ) : (
-            <span className="muted">No resume imported</span>
-          )}
-          <button className="ghost" onClick={() => open("import")}>
-            Import resume
-          </button>
         </div>
         <div className="spacer" />
         <BackupRecovery
@@ -1035,13 +1094,64 @@ export default function ResumeBuilder() {
             onClick={() => setLeft(true)}
           >
             <span>»</span>
-            <span>Templates & jobs</span>
+            <span>Jobs & resumes</span>
           </button>
         ) : (
           <aside className="left-panel">
-            <div className="templates-block">
+            <div
+              className="sidebar-tabs"
+              role="tablist"
+              aria-label="Workspace lists"
+            >
+              {(["jobs", "resumes"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  id={`sidebar-${tab}-tab`}
+                  role="tab"
+                  aria-selected={sidebarTab === tab}
+                  aria-controls={`sidebar-${tab}-panel`}
+                  tabIndex={sidebarTab === tab ? 0 : -1}
+                  onClick={() => {
+                    setSidebarTab(tab);
+                    setFiltersOpen(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                        event.key,
+                      )
+                    )
+                      return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? "jobs"
+                        : event.key === "End"
+                          ? "resumes"
+                          : tab === "jobs"
+                            ? "resumes"
+                            : "jobs";
+                    setSidebarTab(next);
+                    setFiltersOpen(false);
+                    document.getElementById(`sidebar-${next}-tab`)?.focus();
+                  }}
+                >
+                  {tab === "jobs" ? "Jobs" : "Resumes"}
+                  <span>
+                    {tab === "jobs" ? w.jobs.length : w.templates.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div
+              className="templates-block sidebar-list-panel"
+              id="sidebar-resumes-panel"
+              role="tabpanel"
+              aria-labelledby="sidebar-resumes-tab"
+              hidden={sidebarTab !== "resumes"}
+            >
               <div className="section-header">
-                <strong>Templates</strong>
+                <strong>Resumes</strong>
                 <button
                   className="text-button"
                   onClick={createBlankResume}
@@ -1051,7 +1161,18 @@ export default function ResumeBuilder() {
                   + New
                 </button>
               </div>
+              <button
+                className="ghost sidebar-import-button"
+                onClick={() => open("import")}
+              >
+                Import resume
+              </button>
               <div className="template-list">
+                {w.templates.length === 0 && (
+                  <p className="sidebar-empty muted">
+                    Create or import a resume to get started.
+                  </p>
+                )}
                 {w.templates.map((t) => (
                   <div className="template-item" key={t.id}>
                     <button
@@ -1059,6 +1180,7 @@ export default function ResumeBuilder() {
                         "template-row " +
                         (w.viewTemplateId === t.id ? "selected" : "")
                       }
+                      aria-pressed={w.viewTemplateId === t.id}
                       onClick={() => selectTemplate(t.id)}
                     >
                       <span className="doc-icon" />
@@ -1070,430 +1192,537 @@ export default function ResumeBuilder() {
                         jobs
                       </span>
                     </button>
-                    <button
-                      className="icon-button rename-template-button"
-                      title="Rename resume"
-                      aria-label={`Rename resume ${t.name}`}
-                      onClick={() => {
-                        setRenamingTemplate(t.id);
-                        setResumeName(t.name);
-                        open("rename-template");
-                      }}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
+                    <div className="resume-actions">
+                      <button
+                        className="icon-button"
+                        aria-label={`Actions for resume ${t.name}`}
+                        title="Resume actions"
+                        popoverTarget={`resume-actions-${t.id}`}
+                        onClick={(event) => {
+                          const rect =
+                            event.currentTarget.getBoundingClientRect();
+                          const menu = document.getElementById(
+                            `resume-actions-${t.id}`,
+                          );
+                          if (menu) {
+                            menu.style.left = `${Math.max(8, rect.right - 150)}px`;
+                            menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - 140)}px`;
+                          }
+                        }}
                       >
-                        <path d="M3 10.5 10.5 3 13 5.5 5.5 13H3z M9 4.5l2.5 2.5" />
-                      </svg>
-                    </button>
-                    <button
-                      className="icon-button duplicate-template-button"
-                      title="Duplicate resume"
-                      aria-label={`Duplicate resume ${t.name}`}
-                      disabled={duplicatingTemplateId !== null}
-                      onClick={() => void duplicateTemplate(t.id)}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
+                        ···
+                      </button>
+                      <div
+                        id={`resume-actions-${t.id}`}
+                        popover="auto"
+                        className="resume-actions-menu"
+                        onClick={(event) => event.currentTarget.hidePopover()}
                       >
-                        <rect x="5.5" y="5.5" width="8" height="8" rx="1.2" />
-                        <path d="M10.5 3.5v-1h-8v8h1" />
-                      </svg>
-                    </button>
-                    <button
-                      className="icon-button delete-template-button"
-                      title="Delete template"
-                      aria-label={`Delete template ${t.name}`}
-                      onClick={() => askDeleteTemplate(t.id)}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                      >
-                        <path d="M3 4h10M6 4V2h4v2M4 4l.7 10h6.6L12 4M6.5 6v5.5M9.5 6v5.5" />
-                      </svg>
-                    </button>
+                        <button
+                          className="icon-button rename-template-button"
+                          title="Rename resume"
+                          aria-label={`Rename resume ${t.name}`}
+                          onClick={() => {
+                            setRenamingTemplate(t.id);
+                            setResumeName(t.name);
+                            open("rename-template");
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className="icon-button duplicate-template-button"
+                          title="Duplicate resume"
+                          aria-label={`Duplicate resume ${t.name}`}
+                          disabled={duplicatingTemplateId !== null}
+                          onClick={() => void duplicateTemplate(t.id)}
+                        >
+                          Duplicate
+                        </button>
+                        <button
+                          className="icon-button delete-template-button"
+                          title="Delete template"
+                          aria-label={`Delete template ${t.name}`}
+                          onClick={() => askDeleteTemplate(t.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="jobs-header">
-              <div>
-                <strong>Jobs</strong>
-                <div className="muted">{w.jobs.length} saved</div>
-              </div>
-              <button className="primary small" onClick={() => open("job")}>
-                + Add job
-              </button>
-            </div>
             <div
-              className="job-search"
-              role="search"
-              aria-label="Search and filter jobs"
+              className="sidebar-list-panel"
+              id="sidebar-jobs-panel"
+              role="tabpanel"
+              aria-labelledby="sidebar-jobs-tab"
+              hidden={sidebarTab !== "jobs"}
             >
-              <label className="job-search-input">
-                <svg
-                  aria-hidden="true"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <circle cx="6.5" cy="6.5" r="4.5" />
-                  <path d="m10 10 4 4" />
-                </svg>
-                <input
-                  type="search"
-                  aria-label="Search jobs"
-                  placeholder="Search jobs…"
-                  title="Search by company, title, location or keyword"
-                  value={jobSearch}
-                  onChange={(e) => setJobSearch(e.target.value)}
-                />
-              </label>
-              <div className="job-filter-row">
-                <label>
-                  <span>Status</span>
-                  <select
-                    aria-label="Filter jobs by status"
-                    value={jobStatusFilter}
-                    onChange={(e) => setJobStatusFilter(e.target.value)}
-                  >
-                    <option value="">All statuses</option>
-                    <option value="none">No status</option>
-                    <option value="to-apply">To apply</option>
-                    <option value="applied">Applied</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Resume</span>
-                  <select
-                    aria-label="Filter jobs by resume"
-                    value={activeJobTemplateFilter}
-                    onChange={(e) => setJobTemplateFilter(e.target.value)}
-                  >
-                    <option value="">All resumes</option>
-                    {w.templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                    <option value="__none__">No resume</option>
-                  </select>
-                </label>
+              <div className="jobs-header">
+                <div>
+                  <strong>Jobs</strong>
+                  <div className="muted">{w.jobs.length} saved</div>
+                </div>
+                <button className="primary small" onClick={() => open("job")}>
+                  + Add job
+                </button>
               </div>
-            </div>
-            {(w.jobs.length > 0 || jobFiltersActive) && (
-              <div className="job-list-controls">
-                {jobFiltersActive && (
-                  <>
-                    <span className="muted job-result-count" role="status">
-                      {visibleJobs.length} of {w.jobs.length} jobs
-                    </span>
-                    <button className="text-button" onClick={clearJobFilters}>
-                      Clear filters
+              <div
+                className="job-search"
+                role="search"
+                aria-label="Search and filter jobs"
+              >
+                <div className="job-search-toolbar">
+                  <label className="job-search-input">
+                    <svg
+                      aria-hidden="true"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    >
+                      <circle cx="6.5" cy="6.5" r="4.5" />
+                      <path d="m10 10 4 4" />
+                    </svg>
+                    <input
+                      type="search"
+                      aria-label="Search jobs"
+                      placeholder="Search jobs…"
+                      title="Search by company, title, location or keyword"
+                      value={jobSearch}
+                      onChange={(e) => setJobSearch(e.target.value)}
+                    />
+                  </label>
+                  <div
+                    className="filter-control"
+                    ref={filterControl}
+                    onBlur={(event) => {
+                      if (
+                        !event.currentTarget.contains(
+                          event.relatedTarget as Node,
+                        )
+                      )
+                        setFiltersOpen(false);
+                    }}
+                  >
+                    <button
+                      className="ghost filter-trigger"
+                      ref={filterTrigger}
+                      aria-expanded={filtersOpen}
+                      aria-controls="job-filters"
+                      onClick={() => setFiltersOpen((open) => !open)}
+                    >
+                      Filters
+                      {(jobStatusFilter ||
+                        activeJobTemplateFilter ||
+                        activeJobCompanyFilter.length > 0) && (
+                        <span className="filter-count">
+                          {Number(!!jobStatusFilter) +
+                            Number(!!activeJobTemplateFilter) +
+                            Number(activeJobCompanyFilter.length > 0)}
+                        </span>
+                      )}
                     </button>
-                  </>
-                )}
-                {visibleJobs.length > 0 && (
-                  <button
-                    className="text-button"
-                    aria-label={
-                      allJobsCollapsed ? "Expand all jobs" : "Collapse all jobs"
-                    }
-                    onClick={() =>
-                      setCollapsedJobs((current) => ({
-                        ...current,
-                        ...Object.fromEntries(
-                          visibleJobs.map((j) => [j.id, !allJobsCollapsed]),
-                        ),
-                      }))
-                    }
-                  >
-                    {allJobsCollapsed ? "Expand all" : "Collapse all"}
-                  </button>
-                )}
+                    {filtersOpen && (
+                      <div
+                        className="job-filter-popover"
+                        id="job-filters"
+                        role="group"
+                        aria-label="Job filters"
+                      >
+                        <div className="section-header">
+                          <strong>Filter jobs</strong>
+                          <button
+                            className="text-button"
+                            onClick={() => {
+                              setJobStatusFilter("");
+                              setJobTemplateFilter("");
+                              setJobCompanyFilter([]);
+                            }}
+                          >
+                            Reset
+                          </button>
+                        </div>
+                        <div className="job-filter-row">
+                          <fieldset className="company-filter">
+                            <legend>Company</legend>
+                            <button
+                              className="text-button"
+                              onClick={() => setJobCompanyFilter([])}
+                            >
+                              All companies
+                            </button>
+                            <div className="company-filter-options">
+                              {jobCompanies.length === 0 && (
+                                <span className="muted">
+                                  No saved companies
+                                </span>
+                              )}
+                              {jobCompanies.map((company) => (
+                                <label key={company}>
+                                  <input
+                                    type="checkbox"
+                                    checked={activeJobCompanyFilter.includes(
+                                      company,
+                                    )}
+                                    onChange={(event) => {
+                                      const checked = event.target.checked;
+                                      setJobCompanyFilter((current) =>
+                                        checked
+                                          ? [...current, company]
+                                          : current.filter(
+                                              (value) => value !== company,
+                                            ),
+                                      );
+                                    }}
+                                  />
+                                  <span>{company}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <span className="muted company-filter-hint">
+                              {activeJobCompanyFilter.length
+                                ? `${activeJobCompanyFilter.length} selected`
+                                : "Showing all companies"}
+                            </span>
+                          </fieldset>
+                          <label>
+                            <span>Status</span>
+                            <select
+                              aria-label="Filter jobs by status"
+                              value={jobStatusFilter}
+                              onChange={(e) =>
+                                setJobStatusFilter(e.target.value)
+                              }
+                            >
+                              <option value="">All statuses</option>
+                              <option value="none">No status</option>
+                              <option value="to-apply">To apply</option>
+                              <option value="applied">Applied</option>
+                              <option value="rejected">Rejected</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>Resume</span>
+                            <select
+                              aria-label="Filter jobs by resume"
+                              value={activeJobTemplateFilter}
+                              onChange={(e) =>
+                                setJobTemplateFilter(e.target.value)
+                              }
+                            >
+                              <option value="">All resumes</option>
+                              {w.templates.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name.replaceAll("_", " ")}
+                                </option>
+                              ))}
+                              <option value="__none__">No resume</option>
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-            <div
-              className="job-list"
-              onDragOver={(e) => {
-                if (!draggingJob) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                const items = [
-                  ...e.currentTarget.querySelectorAll<HTMLElement>(".job-item"),
-                ];
-                const before = items.findIndex((el) => {
-                  const r = el.getBoundingClientRect();
-                  return e.clientY < r.top + r.height / 2;
-                });
-                setDropJobIndex(before < 0 ? items.length : before);
-              }}
-              onDragLeave={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node))
-                  setDropJobIndex(null);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (draggingJob && dropJobIndex !== null) {
-                  const id = draggingJob,
-                    from = visibleJobs.findIndex((j) => j.id === id),
-                    to = from < dropJobIndex ? dropJobIndex - 1 : dropJobIndex;
-                  setW((s) => ({
-                    ...s,
-                    jobs: reorderVisibleJobs(
-                      s.jobs,
-                      visibleJobs.map((j) => j.id),
-                      id,
-                      to,
-                    ),
-                  }));
-                }
-                setDraggingJob(null);
-                setDropJobIndex(null);
-              }}
-            >
-              {visibleJobs.length === 0 && (
-                <div className="job-list-empty">
-                  <p>
-                    {jobFiltersActive
-                      ? "No jobs match your search or filters."
-                      : "No saved jobs yet."}
-                  </p>
-                  <p className="muted">
-                    {jobFiltersActive
-                      ? "Try another search or clear the filters above."
-                      : "Add a job to get started."}
-                  </p>
+              {(jobStatusFilter ||
+                activeJobTemplateFilter ||
+                activeJobCompanyFilter.length > 0) && (
+                <div
+                  className="active-job-filters"
+                  aria-label="Active job filters"
+                >
+                  {activeJobCompanyFilter.map((company) => (
+                    <button
+                      key={company}
+                      onClick={() =>
+                        setJobCompanyFilter((current) =>
+                          current.filter((value) => value !== company),
+                        )
+                      }
+                      aria-label={`Remove company filter ${company}`}
+                    >
+                      {company} <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                  {jobStatusFilter && (
+                    <button
+                      onClick={() => setJobStatusFilter("")}
+                      aria-label="Remove status filter"
+                    >
+                      {jobStatusFilter === "none"
+                        ? "No status"
+                        : jobStatusFilter === "to-apply"
+                          ? "To apply"
+                          : jobStatusFilter === "applied"
+                            ? "Applied"
+                            : "Rejected"}{" "}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  )}
+                  {activeJobTemplateFilter && (
+                    <button
+                      onClick={() => setJobTemplateFilter("")}
+                      aria-label="Remove resume filter"
+                    >
+                      {activeJobTemplateFilter === "__none__"
+                        ? "No resume"
+                        : w.templates
+                            .find((t) => t.id === activeJobTemplateFilter)
+                            ?.name.replaceAll("_", " ")}{" "}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  )}
                 </div>
               )}
-              {visibleJobs.map((j, i) => {
-                const collapsed = collapsedJobs[j.id] === true;
-                return (
-                  <div
-                    key={j.id}
-                    className={
-                      "job-item" +
-                      (collapsed ? " collapsed" : "") +
-                      (j.status ? " status-" + j.status : "") +
-                      (draggingJob === j.id ? " dragging" : "") +
-                      (dropJobIndex === i && draggingJob
-                        ? " drop-before"
-                        : "") +
-                      (dropJobIndex === visibleJobs.length &&
-                      draggingJob &&
-                      i === visibleJobs.length - 1
-                        ? " drop-after"
-                        : "")
-                    }
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", j.id);
-                      setDraggingJob(j.id);
-                    }}
-                    onDragEnd={() => {
-                      setDraggingJob(null);
-                      setDropJobIndex(null);
-                    }}
-                  >
-                    <button
+              {jobFiltersActive && (
+                <div className="job-list-controls">
+                  <span className="muted job-result-count" role="status">
+                    {visibleJobs.length} of {w.jobs.length} jobs
+                  </span>
+                  <button className="text-button" onClick={clearJobFilters}>
+                    Clear filters
+                  </button>
+                </div>
+              )}
+              <div
+                className="job-list"
+                onDragOver={(e) => {
+                  if (!draggingJob) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  const items = [
+                    ...e.currentTarget.querySelectorAll<HTMLElement>(
+                      ".job-item",
+                    ),
+                  ];
+                  const before = items.findIndex((el) => {
+                    const r = el.getBoundingClientRect();
+                    return e.clientY < r.top + r.height / 2;
+                  });
+                  setDropJobIndex(before < 0 ? items.length : before);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node))
+                    setDropJobIndex(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggingJob && dropJobIndex !== null) {
+                    const id = draggingJob,
+                      from = visibleJobs.findIndex((j) => j.id === id),
+                      to =
+                        from < dropJobIndex ? dropJobIndex - 1 : dropJobIndex;
+                    setW((s) => ({
+                      ...s,
+                      jobs: reorderVisibleJobs(
+                        s.jobs,
+                        visibleJobs.map((j) => j.id),
+                        id,
+                        to,
+                      ),
+                    }));
+                  }
+                  setDraggingJob(null);
+                  setDropJobIndex(null);
+                }}
+              >
+                {visibleJobs.length === 0 && (
+                  <div className="job-list-empty">
+                    <p>
+                      {jobFiltersActive
+                        ? "No jobs match your search or filters."
+                        : "No saved jobs yet."}
+                    </p>
+                    <p className="muted">
+                      {jobFiltersActive
+                        ? "Try another search or clear the filters above."
+                        : "Add a job to get started."}
+                    </p>
+                  </div>
+                )}
+                {visibleJobs.map((j, i) => {
+                  const selected = job?.id === j.id;
+                  return (
+                    <div
+                      key={j.id}
                       className={
-                        "job-card " +
-                        (job?.id === j.id ? "selected" : "") +
-                        (j.status ? " status-" + j.status : "")
+                        "job-item" +
+                        (j.status ? " status-" + j.status : "") +
+                        (draggingJob === j.id ? " dragging" : "") +
+                        (dropJobIndex === i && draggingJob
+                          ? " drop-before"
+                          : "") +
+                        (dropJobIndex === visibleJobs.length &&
+                        draggingJob &&
+                        i === visibleJobs.length - 1
+                          ? " drop-after"
+                          : "")
                       }
-                      title="Drag to reorder · Alt+↑/↓ to move"
-                      onClick={() => selectJob(j.id)}
-                      onKeyDown={(e) => {
-                        if (
-                          !e.altKey ||
-                          (e.key !== "ArrowUp" && e.key !== "ArrowDown")
-                        )
-                          return;
-                        e.preventDefault();
-                        const btn = e.currentTarget;
-                        setW((s) => ({
-                          ...s,
-                          jobs: reorderVisibleJobs(
-                            s.jobs,
-                            visibleJobs.map((job) => job.id),
-                            j.id,
-                            i + (e.key === "ArrowUp" ? -1 : 1),
-                          ),
-                        }));
-                        requestAnimationFrame(() => btn.focus());
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", j.id);
+                        setDraggingJob(j.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingJob(null);
+                        setDropJobIndex(null);
                       }}
                     >
-                      <span
+                      <button
                         className={
-                          collapsed ? "company job-summary-company" : "sr-only"
+                          "job-card " +
+                          (job?.id === j.id ? "selected" : "") +
+                          (j.status ? " status-" + j.status : "")
                         }
-                        title={collapsed ? j.company : undefined}
+                        aria-pressed={selected}
+                        title="Drag to reorder · Alt+↑/↓ to move"
+                        onClick={() => selectJob(j.id)}
+                        onKeyDown={(e) => {
+                          if (
+                            !e.altKey ||
+                            (e.key !== "ArrowUp" && e.key !== "ArrowDown")
+                          )
+                            return;
+                          e.preventDefault();
+                          const btn = e.currentTarget;
+                          setW((s) => ({
+                            ...s,
+                            jobs: reorderVisibleJobs(
+                              s.jobs,
+                              visibleJobs.map((job) => job.id),
+                              j.id,
+                              i + (e.key === "ArrowUp" ? -1 : 1),
+                            ),
+                          }));
+                          requestAnimationFrame(() => btn.focus());
+                        }}
                       >
-                        {j.company}
-                      </span>
-                      <span className="job-title" title={j.title}>
-                        {j.title}
-                      </span>
-                      <span
-                        className="job-card-details"
-                        id={`job-details-${j.id}`}
-                        hidden={collapsed}
-                      >
-                        <span
-                          className="job-meta"
-                          title={`${j.location || "Location not specified"} · ${j.source}`}
-                        >
-                          <span>{j.location || "Location not specified"}</span>
-                          <span className="job-meta-source">
-                            {" "}
-                            ·{" "}
-                            {j.source === "Pasted description"
-                              ? "Pasted"
-                              : j.source}
-                          </span>
-                        </span>
-                        <span
-                          className={
-                            "template-tag job-template-tag " +
-                            (j.tailoredDocId ? "tailored" : "")
-                          }
-                          title={
-                            w.templates.find((t) => t.id === j.templateId)
-                              ?.name || "No template"
-                          }
-                        >
-                          <svg
-                            width="13"
-                            height="13"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            aria-hidden="true"
+                        <span className="job-summary-line">
+                          <span
+                            className="company job-summary-company"
+                            title={j.company}
                           >
-                            <path d="M3.5 1.5H9l3.5 3.5v9.5h-9z M9 1.5V5h3.5 M5.5 8h5 M5.5 10.5h4" />
-                          </svg>
-                          <span className="job-template-name">
-                            {(
-                              w.templates.find((t) => t.id === j.templateId)
-                                ?.name || "No template"
-                            ).replaceAll("_", " ")}
+                            {j.company}
                           </span>
-                          {j.tailoredDocId && (
-                            <span className="job-tailored-badge">Tailored</span>
+                          {matches.get(j) ? (
+                            <ScorePill pct={matches.get(j)!.pct} />
+                          ) : (
+                            <span className="score-pill">—</span>
                           )}
                         </span>
-                      </span>
-                    </button>
-                    <div className="job-card-header" hidden={collapsed}>
-                      <div className="job-company-line">
-                        <button
-                          className="company"
-                          onClick={() => selectJob(j.id)}
-                          title={j.company}
-                          aria-label={`Select job ${j.title} at ${j.company}`}
+                        <span className="job-title" title={j.title}>
+                          {j.title}
+                        </span>
+                        <span className="job-summary-status">
+                          {j.status === "to-apply"
+                            ? "To apply"
+                            : j.status === "applied"
+                              ? "Applied"
+                              : j.status === "rejected"
+                                ? "Rejected"
+                                : "No status"}
+                          {j.tailoredDocId ? " · Tailored" : ""}
+                        </span>
+                        <span
+                          className="job-card-details"
+                          id={`job-details-${j.id}`}
+                          hidden={!selected}
                         >
-                          {j.company}
-                        </button>
-                        {j.status && (
                           <span
-                            className="job-status-separator"
-                            aria-hidden="true"
+                            className="job-meta"
+                            title={`${j.location || "Location not specified"} · ${j.source}`}
                           >
-                            •
+                            <span>
+                              {j.location || "Location not specified"}
+                            </span>
+                            <span className="job-meta-source">
+                              {" "}
+                              ·{" "}
+                              {j.source === "Pasted description"
+                                ? "Pasted"
+                                : j.source}
+                            </span>
                           </span>
-                        )}
-                        <select
-                          className={"job-status " + (j.status || "unset")}
-                          aria-label={`Status for ${j.title} at ${j.company}`}
-                          title={
-                            j.status ? "Change job status" : "Set job status"
-                          }
-                          value={j.status || ""}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            const status = jobStatuses.find((s) => s === value);
-                            setW((s) => ({
-                              ...s,
-                              jobs: s.jobs.map((x) =>
-                                x.id === j.id ? { ...x, status } : x,
-                              ),
-                            }));
-                          }}
-                        >
-                          <option value="">No status</option>
-                          <option value="to-apply">To apply</option>
-                          <option value="applied">Applied</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
+                          <span
+                            className={
+                              "template-tag job-template-tag " +
+                              (j.tailoredDocId ? "tailored" : "")
+                            }
+                            title={
+                              w.templates.find((t) => t.id === j.templateId)
+                                ?.name || "No template"
+                            }
+                          >
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.2"
+                              aria-hidden="true"
+                            >
+                              <path d="M3.5 1.5H9l3.5 3.5v9.5h-9z M9 1.5V5h3.5 M5.5 8h5 M5.5 10.5h4" />
+                            </svg>
+                            <span className="job-template-name">
+                              {(
+                                w.templates.find((t) => t.id === j.templateId)
+                                  ?.name || "No template"
+                              ).replaceAll("_", " ")}
+                            </span>
+                            {j.tailoredDocId && (
+                              <span className="job-tailored-badge">
+                                Tailored
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                      <div className="job-card-header" hidden={!selected}>
+                        <label className="job-company-line">
+                          <span className="muted">Status</span>
+                          <select
+                            className={"job-status " + (j.status || "unset")}
+                            aria-label={`Status for ${j.title} at ${j.company}`}
+                            title={
+                              j.status ? "Change job status" : "Set job status"
+                            }
+                            value={j.status || ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              const status = jobStatuses.find(
+                                (s) => s === value,
+                              );
+                              setW((s) => ({
+                                ...s,
+                                jobs: s.jobs.map((x) =>
+                                  x.id === j.id ? { ...x, status } : x,
+                                ),
+                              }));
+                            }}
+                          >
+                            <option value="">No status</option>
+                            <option value="to-apply">To apply</option>
+                            <option value="applied">Applied</option>
+                            <option value="rejected">Rejected</option>
+                          </select>
+                        </label>
                       </div>
-                      {matches.get(j) ? (
-                        <ScorePill pct={matches.get(j)!.pct} />
-                      ) : (
-                        <span className="score-pill">—</span>
-                      )}
                     </div>
-                    <button
-                      className="icon-button job-collapse-button"
-                      aria-label={`${collapsed ? "Expand" : "Collapse"} job ${j.title} at ${j.company}`}
-                      aria-expanded={!collapsed}
-                      aria-controls={`job-details-${j.id}`}
-                      title={
-                        collapsed
-                          ? "Expand job details"
-                          : "Collapse job details"
-                      }
-                      onClick={() =>
-                        setCollapsedJobs((current) => ({
-                          ...current,
-                          [j.id]: !collapsed,
-                        }))
-                      }
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d={collapsed ? "m6 4 4 4-4 4" : "m4 6 4 4 4-4"} />
-                      </svg>
-                    </button>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <p className="panel-hint">
+                Paste a job link or full description to add a job.
+              </p>
             </div>
-            <p className="panel-hint">
-              Paste a job link or full description to add a job.
-            </p>
             <span
               className={
                 "save-state " +
@@ -1542,6 +1771,12 @@ export default function ResumeBuilder() {
                         ? "from " + (template?.name || "deleted template")
                         : "used by " + uses + " jobs"}
                     </span>
+                    {job && (
+                      <span className="assigned-resume muted">
+                        Resume:{" "}
+                        {template?.name.replaceAll("_", " ") || "No resume"}
+                      </span>
+                    )}
                     <div className="spacer" />
                     {template && (
                       <ResumeSourceViewer
@@ -1592,7 +1827,7 @@ export default function ResumeBuilder() {
                       ) : (
                         <>
                           <label className="template-select-label">
-                            Template{" "}
+                            Change resume{" "}
                             <select
                               aria-label="Base template"
                               value={job.templateId}
@@ -2241,6 +2476,7 @@ export default function ResumeBuilder() {
                 >
                   Job description & links
                 </button>
+                {comparisonPanel}
                 {matchingStatus}
                 {!ai && (
                   <button
@@ -2253,7 +2489,7 @@ export default function ResumeBuilder() {
                 <button
                   className="primary full-width"
                   disabled={!ai || matches.busy(job)}
-                  onClick={() => void matches.reassess(job, doc)}
+                  onClick={reassessSelected}
                 >
                   Reassess with AI
                 </button>
@@ -2325,12 +2561,14 @@ export default function ResumeBuilder() {
                     </div>
                   </div>
                   <div className="score-copy">
+                    <span className="muted">Attached resume</span>
                     <strong>{tier(analysis.pct)}</strong>
                     <span>
                       {analysis.matched} of {analysis.items.length} skills
                       matched
                     </span>
                   </div>
+                  {comparisonPanel}
                 </div>
                 <p className="saved-assessment-label">
                   Saved assessment ·{" "}
@@ -2349,7 +2587,7 @@ export default function ResumeBuilder() {
                   <button
                     className="text-button"
                     disabled={!ai || !doc || matches.busy(job)}
-                    onClick={() => doc && void matches.reassess(job, doc)}
+                    onClick={reassessSelected}
                   >
                     Reassess with AI
                   </button>

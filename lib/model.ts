@@ -71,6 +71,8 @@ export type Job = z.infer<typeof jobInputSchema> & {
   additionalUrls?: string[];
   tailoredDocId?: string;
   assessment?: SavedAssessment;
+  comparisonDocIds?: string[];
+  comparisonAssessments?: Record<string, SavedAssessment>;
   status?: JobStatus;
 };
 export function moveJob(jobs: Job[], id: string, to: number): Job[] {

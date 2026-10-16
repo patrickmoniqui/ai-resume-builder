@@ -21,7 +21,11 @@ type RequestState = {
 };
 export function useAIMatches(
   connection: AIConnection | null,
-  onSave: (jobId: string, assessment: SavedAssessment) => void,
+  onSave: (
+    jobId: string,
+    assessment: SavedAssessment,
+    comparisonId?: string,
+  ) => void,
 ) {
   const [reports, setReports] = useState<Record<string, MatchDebugReport>>({});
   const [requests, setRequests] = useState<Record<string, RequestState>>({});
@@ -45,21 +49,34 @@ export function useAIMatches(
   useEffect(() => {
     for (const controller of controllers.current.values()) controller.abort();
   }, [identity]);
-  async function reassess(job: Job, doc: Resume) {
-    if (!connection || controllers.current.has(job.id)) return;
+  const requestKey = (job: Job, comparisonId?: string) =>
+    JSON.stringify([job.id, comparisonId || null]);
+  const jobRequests = (job: Job) =>
+    Object.entries(requests)
+      .filter(([key]) => {
+        const [jobId, comparisonId] = JSON.parse(key);
+        return (
+          jobId === job.id &&
+          (!comparisonId || job.comparisonDocIds?.includes(comparisonId))
+        );
+      })
+      .map(([, value]) => value);
+  async function reassess(job: Job, doc: Resume, comparisonId?: string) {
+    const key = requestKey(job, comparisonId);
+    if (!connection || controllers.current.has(key)) return;
     const controller = new AbortController();
-    controllers.current.set(job.id, controller);
+    controllers.current.set(key, controller);
     const snapshot = structuredClone(doc),
       jobSnapshot = structuredClone(job);
     const startedAt = Date.now();
     setNow(startedAt);
     setRequests((old) => ({
       ...old,
-      [job.id]: { startedAt, running: true, progress: null },
+      [key]: { startedAt, running: true, progress: null },
     }));
     setReports((old) => ({
       ...old,
-      [job.id]: createMatchDebug(connection, jobSnapshot, snapshot),
+      [key]: createMatchDebug(connection, jobSnapshot, snapshot),
     }));
     try {
       const result = await fetchResumeMatch(
@@ -68,13 +85,11 @@ export function useAIMatches(
         undefined,
         (progress) =>
           setRequests((old) =>
-            old[job.id]
-              ? { ...old, [job.id]: { ...old[job.id], progress } }
-              : old,
+            old[key] ? { ...old, [key]: { ...old[key], progress } } : old,
           ),
         (entry, requestId) =>
           setReports((old) => {
-            const report = old[job.id];
+            const report = old[key];
             if (!report || (report.requestId && report.requestId !== requestId))
               return old;
             const status =
@@ -87,7 +102,7 @@ export function useAIMatches(
                   : report.status;
             return {
               ...old,
-              [job.id]: {
+              [key]: {
                 ...report,
                 requestId,
                 status,
@@ -100,14 +115,15 @@ export function useAIMatches(
         saveRef.current(
           job.id,
           saveAssessment(connection, jobSnapshot, snapshot, result),
+          comparisonId,
         );
     } catch (error) {
       setRequests((old) =>
-        old[job.id]
+        old[key]
           ? {
               ...old,
-              [job.id]: {
-                ...old[job.id],
+              [key]: {
+                ...old[key],
                 error:
                   (error as Error).name === "AbortError"
                     ? "Assessment canceled."
@@ -117,12 +133,10 @@ export function useAIMatches(
           : old,
       );
     } finally {
-      if (controllers.current.get(job.id) === controller)
-        controllers.current.delete(job.id);
+      if (controllers.current.get(key) === controller)
+        controllers.current.delete(key);
       setRequests((old) =>
-        old[job.id]
-          ? { ...old, [job.id]: { ...old[job.id], running: false } }
-          : old,
+        old[key] ? { ...old, [key]: { ...old[key], running: false } } : old,
       );
     }
   }
@@ -131,17 +145,25 @@ export function useAIMatches(
     stale: (job: Job, doc?: Resume) =>
       !!job.assessment &&
       (!doc || job.assessment.inputSignature !== assessmentSignature(job, doc)),
-    error: (job: Job, _doc?: Resume) => requests[job.id]?.error,
-    busy: (job: Job, _doc?: Resume) => !!requests[job.id]?.running,
+    error: (job: Job, _doc?: Resume) =>
+      jobRequests(job).find((r) => r.error)?.error,
+    busy: (job: Job, _doc?: Resume) => jobRequests(job).some((r) => r.running),
+    comparisonState: (job: Job, id: string) => requests[requestKey(job, id)],
     elapsed: (job: Job) =>
       Math.max(
         0,
-        Math.floor((now - (requests[job.id]?.startedAt || now)) / 1000),
+        Math.floor(
+          (now - (jobRequests(job).find((r) => r.running)?.startedAt || now)) /
+            1000,
+        ),
       ),
-    progress: (job: Job) => requests[job.id]?.progress,
-    debug: (job: Job, _doc?: Resume) => reports[job.id],
-    cancel: (job: Job, _doc?: Resume) =>
-      controllers.current.get(job.id)?.abort(),
+    progress: (job: Job) => jobRequests(job).find((r) => r.running)?.progress,
+    debug: (job: Job, _doc?: Resume) => reports[requestKey(job)],
+    cancel: (job: Job, _doc?: Resume) => {
+      for (const [key, controller] of controllers.current) {
+        if (JSON.parse(key)[0] === job.id) controller.abort();
+      }
+    },
     cancelAll: () => {
       for (const controller of controllers.current.values()) controller.abort();
     },

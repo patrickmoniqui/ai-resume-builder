@@ -42,6 +42,8 @@ export const storedWorkspaceSchema = z.object({
         additionalUrls: z.array(jobLinkSchema).max(19).optional(),
         tailoredDocId: id.optional(),
         assessment: savedAssessmentSchema.optional(),
+        comparisonDocIds: z.array(id).max(2).optional(),
+        comparisonAssessments: z.record(id, savedAssessmentSchema).optional(),
         status: z.enum(jobStatuses).optional(),
       }),
     )
