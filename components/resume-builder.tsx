@@ -39,6 +39,7 @@ import InlineField from "./inline-field";
 import Dialog from "./dialog";
 import { useSavedAI } from "./use-saved-ai";
 import { filterJobs, reorderVisibleJobs } from "@/lib/job-list";
+import { useJobFilters } from "./use-job-filters";
 import SkillMatchList from "./skill-match-list";
 import JobLinks from "./job-links";
 import { jobLinks, jobLinkSchema, withJobLinks } from "@/lib/job-links";
@@ -156,10 +157,27 @@ export default function ResumeBuilder() {
       document.removeEventListener("keydown", escape);
     };
   }, [filtersOpen]);
-  const [jobSearch, setJobSearch] = useState("");
-  const [jobStatusFilter, setJobStatusFilter] = useState("");
-  const [jobTemplateFilter, setJobTemplateFilter] = useState("");
-  const [jobCompanyFilter, setJobCompanyFilter] = useState<string[]>([]);
+  const [jobFilters, setJobFilters] = useJobFilters();
+  const {
+    query: jobSearch,
+    status: jobStatusFilter,
+    templateId: jobTemplateFilter,
+    companies: jobCompanyFilter,
+  } = jobFilters;
+  const setJobSearch = (query: string) =>
+    setJobFilters((current) => ({ ...current, query }));
+  const setJobStatusFilter = (status: string) =>
+    setJobFilters((current) => ({ ...current, status }));
+  const setJobTemplateFilter = (templateId: string) =>
+    setJobFilters((current) => ({ ...current, templateId }));
+  const setJobCompanyFilter = (
+    change: string[] | ((current: string[]) => string[]),
+  ) =>
+    setJobFilters((current) => ({
+      ...current,
+      companies:
+        typeof change === "function" ? change(current.companies) : change,
+    }));
   const jobCompanies = [
     ...new Set(w.jobs.map((job) => job.company).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));

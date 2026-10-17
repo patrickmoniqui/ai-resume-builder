@@ -14,6 +14,17 @@ import {
 } from "@/lib/database-client";
 
 type Content = { workspace: Workspace; preferredPages: 1 | 2 | null };
+// Selections and completed AI work must not wait for the text-edit debounce.
+const assessmentState = (workspace: Workspace) =>
+  JSON.stringify(
+    workspace.jobs.map((job) => ({
+      id: job.id,
+      assessment: job.assessment,
+      comparisonDocIds: job.comparisonDocIds,
+      comparisonAssessments: job.comparisonAssessments,
+    })),
+  );
+
 export function useWorkspaceStorage(
   workspace: Workspace,
   preferredPages: 1 | 2 | null,
@@ -30,6 +41,7 @@ export function useWorkspaceStorage(
   const current = useRef<Content>({ workspace, preferredPages });
   current.current = { workspace, preferredPages };
   const saved = useRef("");
+  const savedAssessments = useRef("");
   const revision = useRef(0);
   const inFlight = useRef<Promise<void> | null>(null);
   const conflict = useRef(false);
@@ -43,6 +55,7 @@ export function useWorkspaceStorage(
         workspace: state.workspace,
         preferredPages: state.preferredPages,
       });
+      savedAssessments.current = assessmentState(state.workspace);
       current.current = {
         workspace: state.workspace,
         preferredPages: state.preferredPages,
@@ -130,6 +143,7 @@ export function useWorkspaceStorage(
           revision.current = result.revision;
           setStorageSession(result);
           saved.current = serialized;
+          savedAssessments.current = assessmentState(content.workspace);
           if (result.backupWarning) setNotice(result.backupWarning);
         }
         setStatus("saved");
@@ -158,6 +172,10 @@ export function useWorkspaceStorage(
     )
       return;
     setStatus("saving");
+    if (assessmentState(workspace) !== savedAssessments.current) {
+      void flush().catch(() => {});
+      return;
+    }
     const timer = setTimeout(() => void flush().catch(() => {}), 450);
     return () => clearTimeout(timer);
   }, [workspace, preferredPages, ready, flush]);

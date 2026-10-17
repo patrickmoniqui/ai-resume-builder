@@ -170,6 +170,16 @@ try {
     .getByRole("button", { name: "Save comparison", exact: true })
     .click();
   await expect(page.locator(".comparison-ring")).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator(".comparison-ring > strong")).toHaveText([
+    "82%",
+    "—",
+  ]);
+  assert.equal(
+    requests.length,
+    0,
+    "Comparison selections survive an immediate reload without running AI",
+  );
   await page
     .getByRole("button", { name: "Reassess with AI", exact: true })
     .click();
@@ -186,6 +196,16 @@ try {
     "82%",
   ]);
   assert.deepEqual(requests, ["Tailored", "Tailored"]);
+  await page.reload();
+  await expect(page.locator(".comparison-ring > strong")).toHaveText([
+    "82%",
+    "82%",
+  ]);
+  assert.equal(
+    requests.length,
+    2,
+    "Reload reuses saved scores without another AI request",
+  );
   const rings = page.locator(".score-block > .score-ring, .comparison-ring");
   const bounds = await rings.evaluateAll((els) =>
     els.map((el) => {

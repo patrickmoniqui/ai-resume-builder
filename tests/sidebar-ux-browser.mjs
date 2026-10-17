@@ -140,6 +140,35 @@ try {
   await page.getByRole("checkbox", { name: "Company 3", exact: true }).check();
   await expect(page.locator(".job-card")).toHaveCount(2);
   await expect(filters).toHaveText("Filters3");
+  await page.getByRole("searchbox", { name: "Search jobs" }).fill("engineer");
+  await page.reload();
+  await expect(page.locator(".job-card")).toHaveCount(2);
+  await expect(
+    page.getByRole("searchbox", { name: "Search jobs" }),
+  ).toHaveValue("engineer");
+  await expect(
+    page.getByRole("button", {
+      name: "Remove company filter Company 1",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Remove company filter Company 3",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await filters.click();
+  await expect(page.getByLabel("Filter jobs by status")).toHaveValue("applied");
+  await expect(page.getByLabel("Filter jobs by resume")).toHaveValue(
+    "AI_Resume",
+  );
+  await expect(
+    page.getByRole("checkbox", { name: "Company 1", exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: "Company 3", exact: true }),
+  ).toBeChecked();
   await page.getByLabel("Filter jobs by resume").press("Escape");
   await expect(filters).toBeFocused();
   await expect(page.getByLabel("Filter jobs by status")).toBeHidden();
@@ -162,6 +191,7 @@ try {
   await expect(page.locator(".job-card")).toHaveCount(9);
   await page.getByRole("button", { name: "Remove status filter" }).click();
   await page.getByRole("button", { name: "Remove resume filter" }).click();
+  await page.getByRole("searchbox", { name: "Search jobs" }).fill("");
   await page.getByRole("searchbox", { name: "Search jobs" }).fill("Acme");
   await expect(page.locator(".job-card")).toHaveCount(1);
   await page.getByRole("button", { name: "Clear filters" }).click();
@@ -275,6 +305,20 @@ try {
   await expect(
     page.getByRole("button", { name: "Create empty resume" }),
   ).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await jobs.click();
+  await page.getByRole("searchbox", { name: "Search jobs" }).fill("no matches");
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.reload();
+  await expect(page.locator(".job-card")).toHaveCount(18);
+  await expect(
+    page.getByRole("searchbox", { name: "Search jobs" }),
+  ).toHaveValue("");
+  await page.evaluate(() =>
+    localStorage.setItem("resume-builder.job-filters.v1", "invalid-json"),
+  );
+  await page.reload();
+  await expect(page.locator(".job-card")).toHaveCount(18);
   assert.deepEqual(errors, []);
   console.log(
     "Sidebar UX passed: tabs preserve context, keyboard navigation, filters and chips, status, resume assignment, reorder, resume actions, and mobile bounds.",
