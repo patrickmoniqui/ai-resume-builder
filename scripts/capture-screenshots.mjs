@@ -339,7 +339,7 @@ try {
   });
   await page
     .getByRole("button", {
-      name: "Toggle templates and jobs panel",
+      name: "Toggle jobs and resumes panel",
       exact: true,
     })
     .click();
